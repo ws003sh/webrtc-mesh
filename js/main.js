@@ -13,6 +13,7 @@ var pcConfig = {
     'urls': 'stun:stun.l.google.com:19302'
   }]
 };
+
 // Set up audio and video regardless of what devices are present.
 
 /////////////////////////////////////////////
@@ -77,7 +78,6 @@ socket.on('message', function(message) {
       pc.setRemoteDescription(new RTCSessionDescription(message));
       doAnswer();
     } else if (!isInitiator && !isStarted && isAnswer){
-      // 接收端
       pc.setRemoteDescription(new RTCSessionDescription(message));
       doAnswer();
     }
@@ -91,7 +91,7 @@ socket.on('message', function(message) {
     pc.addIceCandidate(candidate);
   } else if (message === 'bye' && isStarted) {
     handleRemoteHangup();
-  } 
+  }
 });
 
 ////////////////////////////////////////////////////
@@ -110,10 +110,10 @@ if (url.indexOf('appkey') === -1) {
   .catch(function(e) {
     alert('getUserMedia() error: ' + e.name);
   });
-  text.innerText = '这里是发送端'
+  text.innerHTML = '这里是发送端'
 } else {
   isAnswer = true
-  text.innerText = '这里是接收端'
+  text.innerHTML = '这里是接收端'
   // 连上信令，进入房间
   // 准备SPD、存储SPD、回答主播
   sendSPDMsg()
@@ -130,11 +130,9 @@ function sendSPDMsg() {
   pc.onicecandidate = handleIceCandidate;
   pc.onaddstream = handleRemoteStreamAdded;
   pc.onremovestream = handleRemoteStreamRemoved;
-
   console.log('Created RTCPeerConnnection' + pc);
   console.log(pc)
-  sendMessage(pc);
-  
+  sendMessage(pc)
 }
 
 ///////////////////////
@@ -157,8 +155,7 @@ console.log('Getting user media with constraints', constraints);
 
 if (location.hostname !== 'localhost') {
   requestTurn(
-    // 'https://computeengineondemand.appspot.com/turn?username=41784574&key=4080218913'
-    'https://108.108.108.27:3478'
+    'https://computeengineondemand.appspot.com/turn?username=41784574&key=4080218913'
   );
 }
 
@@ -173,14 +170,13 @@ function maybeStart() {
     if (isInitiator) {
       doCall();
     }
-  } else if (!isStarted && isChannelReady) {
-    doCall();
   }
 }
 
 window.onbeforeunload = function() {
   sendMessage('bye');
 };
+
 /////////////////////////////////////////////////////////
 // 产生音视频流 RTCPeerConnection
 function createPeerConnection() {
@@ -189,7 +185,6 @@ function createPeerConnection() {
     pc.onicecandidate = handleIceCandidate;
     pc.onaddstream = handleRemoteStreamAdded;
     pc.onremovestream = handleRemoteStreamRemoved;
-    // console.log('Created RTCPeerConnnection' + pc);
   } catch (e) {
     console.log('Failed to create PeerConnection, exception: ' + e.message);
     alert('Cannot create RTCPeerConnection object.');
@@ -200,21 +195,16 @@ function createPeerConnection() {
 function handleIceCandidate(event) {
   console.log('icecandidate event: ', event);
   if (event.candidate) {
-    if(!isAnswer) {
-      sendMessage({
-        type: 'candidate',
-        label: event.candidate.sdpMLineIndex,
-        id: event.candidate.sdpMid,
-        candidate: event.candidate.candidate
-      });
-    }
-    
+    sendMessage({
+      type: 'candidate',
+      label: event.candidate.sdpMLineIndex,
+      id: event.candidate.sdpMid,
+      candidate: event.candidate.candidate
+    });
   } else {
     console.log('End of candidates.');
-  
   }
 }
-
 
 function handleCreateOfferError(event) {
   console.log('createOffer() error: ', event);
