@@ -5,7 +5,9 @@ var isInitiator = false; // 是否为创建者
 var isStarted = false; // p2p连接是否已经开始
 var isAnswer = false // 是否为回答者
 var localStream;
+var who = ''
 var pc;
+var isConnected = false
 var remoteStream;
 var turnReady;
 var pcConfig = {
@@ -23,15 +25,13 @@ let url = location.href
 var remoteVideo = document.querySelector('#remoteVideo');
 var text = document.getElementById('text');
 
-function ceratePC () {
-  pc = new RTCPeerConnection(null);
-  pc.onicecandidate = handleIceCandidate;
-  pc.onaddstream = handleRemoteStreamAdded;
-  pc.onremovestream = handleRemoteStreamRemoved;
-}
-ceratePC()
+pc = new RTCPeerConnection(null);
+pc.onicecandidate = handleIceCandidate;
+pc.onaddstream = handleRemoteStreamAdded;
+pc.onremovestream = handleRemoteStreamRemoved;
 
 if (url.indexOf('appkey') === -1) {
+  who = '发送端： '
   localVideo = document.querySelector('#localVideo')
   navigator.mediaDevices.getUserMedia({
     audio: false,
@@ -43,6 +43,7 @@ if (url.indexOf('appkey') === -1) {
   });
   text.innerHTML = '这里是发送端'
 } else {
+  who = '接收端： '
   isAnswer = true
   text.innerHTML = '这里是接收端'
 }
@@ -61,10 +62,10 @@ socket.on('full', function(room) {
 });
 
 socket.on('join', function (room){
-  console.log('Another peer made a request to join room ' + room);
+  console.log('------- Another peer made a request to join room ' + room + ' ---------');
   isChannelReady = true;
   if (!isAnswer) {
-    // pc.createOffer(setLocalAndSendMessage, handleCreateOfferError);
+    // 主播接收到别人加入的消息，广播自己的SDP
     doCall();
   }
 });
@@ -75,6 +76,7 @@ socket.on('joined', function(room) {
 });
 
 socket.on('log', function(array) {
+  console.log('我是' + who )
   console.log.apply(console, array);
 });
 
@@ -85,7 +87,7 @@ function sendMessage(message) {
 
 // This client receives a message
 socket.on('message', function(message) {
-  console.log('Client received message:', message);
+  console.log(who + 'Client received message:', message);
   if(message.type) {
     console.log('message.type === ', message.type);
   }
@@ -93,42 +95,37 @@ socket.on('message', function(message) {
     if(!isAnswer) {
       maybeStart();
     }
-    // maybeStart();
   } else if (message.type === 'offer') {
     // 通过 setRemoteDescription，设置远端的描述信息。
     if (!isInitiator && !isStarted && !isAnswer) {
       maybeStart();
-      console.log('message.type ===  offer and setRemoteDescription')
+      console.log('message.type ===  offer and setRemoteDescription 1')
       pc.setRemoteDescription(new RTCSessionDescription(message));
-      doAnswer();
     } else if (!isInitiator && !isStarted && isAnswer){
       pc.setRemoteDescription(new RTCSessionDescription(message));
-      console.log('message.type ===  offer and setRemoteDescription')
-      doAnswer();
+      console.log('message.type ===  offer and setRemoteDescription 2')
+      if(!isConnected) {
+        doAnswer();
+      }
     }
   } else if (message.type === 'answer') {
-    console.log('message.type ===  answer and setRemoteDescription')
-    pc.setRemoteDescription(new RTCSessionDescription(message));
+    console.log('我是 ' + who + '，message.type ===  answer and setRemoteDescription')
+    if (!isAnswer) {
+      pc.setRemoteDescription(new RTCSessionDescription(message));
+    }
   } else if (message.type === 'candidate' && isStarted) {
-    var candidate = new RTCIceCandidate({
-      sdpMLineIndex: message.label,
-      candidate: message.candidate
-    });
-    pc.addIceCandidate(candidate);
+    if(!isConnected) {
+      var candidate = new RTCIceCandidate({
+        sdpMLineIndex: message.label,
+        candidate: message.candidate
+      });
+      pc.addIceCandidate(candidate);
+    }
+    
   } else if (message === 'bye' && isStarted) {
     handleRemoteHangup();
   }
 });
-
-////////////////////////////////////////////////////
-
-
-///////////////////
-function sendSPDMsg() {
-  console.log('answer SPD Creat start')
-}
-
-///////////////////////
 
 function gotStream(stream) {
   console.log('Adding local stream.');
@@ -141,12 +138,6 @@ function gotStream(stream) {
     pc.addStream(localStream);
   }
 }
-
-var constraints = {
-  video: true
-};
-
-console.log('Getting user media with constraints', constraints);
 
 if (location.hostname !== 'localhost') {
   requestTurn(
@@ -197,7 +188,7 @@ function handleIceCandidate(event) {
       candidate: event.candidate.candidate
     });
   } else {
-    console.log('End of candidates.');
+    console.log('------ End of candidates. ------');
   }
 }
 
@@ -212,11 +203,13 @@ function doCall() {
   } else {// 主播端 发送自己的offer SPD
     console.log('Sending offer to peer');
     // if (!hasConnection) {
-      pc.createOffer(setLocalAndSendMessage, handleCreateOfferError);
     // }
+    setTimeout(test(), 500)
   }
 }
-
+function test() {
+  pc.createOffer(setLocalAndSendMessage, handleCreateOfferError);
+}
 function doAnswer() {
   console.log('Sending answer to peer.');
   // 用户通过 createAnswer 创建出自己的 SDP 描述
@@ -228,10 +221,14 @@ function doAnswer() {
 
 function setLocalAndSendMessage(sessionDescription) {
   // 主播通过 setLocalDescription，设置本地的描述信息
-  pc.setLocalDescription(sessionDescription);
-  console.log('setLocalAndSendMessage sending message', sessionDescription);
-  // 主播将 offer SDP 发送给用户
-  sendMessage(sessionDescription);
+  if(!sessionDescription) {
+    return
+  } else {
+    pc.setLocalDescription(sessionDescription);
+    console.log('setLocalAndSendMessage sending message', sessionDescription);
+    // 主播将 offer SDP 发送给用户
+    sendMessage(sessionDescription);
+  }
 }
 
 function onCreateSessionDescriptionError(error) {
@@ -272,6 +269,7 @@ function handleRemoteStreamAdded(event) {
   console.log(event)
   remoteStream = event.stream;
   remoteVideo.srcObject = remoteStream;
+  isConnected = true
 }
 
 function handleRemoteStreamRemoved(event) {
