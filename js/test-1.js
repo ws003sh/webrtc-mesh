@@ -218,6 +218,8 @@ function doAnswer() {
         console.log('Sending offer to peer');
         // 4.2 生成各自的SPD描述文件
         if(num > 1) {
+          console.log(' use local2 ')
+
             local2.createOffer(setLocalAndSendMessage, handleCreateOfferError);
         } else {
             local.createOffer(setLocalAndSendMessage, handleCreateOfferError);
@@ -225,6 +227,7 @@ function doAnswer() {
       }
 
       function iam2() {
+        console.log('i am 2')
         navigator.mediaDevices.getUserMedia({
             audio: false,
             video: true
@@ -249,13 +252,14 @@ function doAnswer() {
         } else {
             // 3. 将视频流添加到RTCpeerconnection上，然后待机
             local.addStream(stream);
+            local2.addStream(stream);
         }
     }
 
     function setLocalAndSendMessage(sessionDescription) {
         // 4.3 设置本地的描述信息SDP,然后广播offer端的SDP
         if (isAnswer) {
-            if(num == 91) {
+            if(num > 1) {
                 remote2.setLocalDescription(sessionDescription);
                 console.log('setLocal And SendMessage ', sessionDescription);
                 sendMessage(sessionDescription);
